@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'agent' => 'Agent',
+    'group_by' => 'Group By',
+    'member' => 'Member',
+    'day' => 'Day',
+    'provider' => 'Provider',
+    'game' => 'Game',
+    'player' => 'Player',
+    'tickets' => 'Tickets',
+    'bet' => 'Bet',
+    'payout' => 'Payout',
+    'win' => 'Win',
+    'margin' => 'Margin',
+    'type' => 'Type',
+    'credit' => 'Credit',
+    'debit' => 'Debit',
+    'end_balance' => 'End Balance',
+    'amount' => 'Amount',
+    'deposit' => 'Deposit',
+    'ref_id' => 'Ref ID',
+    'ticket_id' => 'Ticket ID',
+    'balance' => 'Balance',
+    'winlose_name' => 'name',
+    'detail' => 'Detail',
+];

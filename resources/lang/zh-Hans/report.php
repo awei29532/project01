@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'agent' => '代理',
+    'group_by' => '分組',
+    'member' => '会员',
+    'day' => '天',
+    'provider' => '厂商',
+    'game' => '游戏',
+    'player' => '玩家',
+    'tickets' => '单量',
+    'bet' => '下注量',
+    'payout' => '支付量',
+    'win' => '收益量',
+    'margin' => '差额',
+    'type' => '种类',
+    'credit' => '加點',
+    'debit' => '扣點',
+    'end_balance' => '結餘',
+    'amount' => '點數',
+    'deposit' => '還款',
+    'ref_id' => '參考ID',
+    'ticket_id' => '單號',
+    'balance' => '点数',
+    'winlose_name' => '分組',
+    'detail' => '细单',
+];
