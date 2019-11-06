@@ -15,5 +15,5 @@
             ],
         ]
     ])
-    <winlose-component :userid="{{ $userAgentId }}"></winlose-component>
+    <winlose-component></winlose-component>
 @endsection

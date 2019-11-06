@@ -27,11 +27,7 @@
                         </b-form-invalid-feedback>
                     </b-form-group>
                     <b-form-group label-cols-md="1" :label="trans('providers.maintenance_start')" label-for="maintenance_start">
-                        <datetime id="maintenance_start"
-                            type="datetime"
-                            value-zone="UTC+8"
-                            format="yyyy-LL-dd HH:mm"
-                            input-class="form-control"
+                        <datetime format="YYYY-MM-DD H:i:s"
                             v-model="data.maintenance_start">
                         </datetime>
                         <b-form-invalid-feedback>
@@ -39,11 +35,7 @@
                         </b-form-invalid-feedback>
                     </b-form-group>
                     <b-form-group label-cols-md="1" :label="trans('providers.maintenance_end')" label-for="maintenance_end">
-                        <datetime id="maintenance_end"
-                            type="datetime"
-                            value-zone="UTC+8"
-                            format="yyyy-LL-dd HH:mm"
-                            input-class="form-control"
+                        <datetime format="YYYY-MM-DD H:i:s"
                             v-model="data.maintenance_end">
                         </datetime>
                         <b-form-invalid-feedback>
@@ -59,7 +51,7 @@
 </template>
 
 <script>
-const luxon = require('luxon');
+
 export default {
     props: {
         providerid: {
@@ -86,8 +78,6 @@ export default {
             this.data = {
                 id: this.providerid,
                 ...provider,
-                maintenance_start: luxon.DateTime.fromSQL(provider.maintenance_start).toISO(),
-                maintenance_end: luxon.DateTime.fromSQL(provider.maintenance_end).toISO(),
             };
         }
     },
@@ -95,13 +85,8 @@ export default {
         send(e) {
             e.preventDefault();
             this.errors = [];
-            let data = {
-                ...this.data,
-                maintenance_start: this.data.maintenance_start ? luxon.DateTime.fromISO(this.data.maintenance_start).toFormat('yyyy-LL-dd HH:mm:ss') : '',
-                maintenance_end: this.data.maintenance_end ? luxon.DateTime.fromISO(this.data.maintenance_end).toFormat('yyyy-LL-dd HH:mm:ss') : '',
-            };
             let url = '/api/products/provider/' + (this.providerid == 0 ? 'add' : 'edit');
-            axios.post(url, data)
+            this.$ajax('POST', url, this.data)
             .then(res => {
                 location.href = '/products/provider';
             })

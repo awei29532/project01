@@ -15,5 +15,5 @@
             ],
         ]
     ])
-    <transfer-component :userid="{{ $userAgentId }}"></transfer-component>
+    <transfer-component></transfer-component>
 @endsection

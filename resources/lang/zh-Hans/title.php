@@ -28,4 +28,6 @@ return [
     'game_add' => '新增游戏',
     'game_edit' => '编辑游戏',
     'all_report_sw' => '报表 (单一)',
+    'users' => '使用者',
+    'log' => '历史纪录',
 ];

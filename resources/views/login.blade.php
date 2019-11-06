@@ -1,6 +1,6 @@
 @extends('layouts.main', [
     'title' => 'login',
-    'isLogin'   => true,
+    'loginPage'   => true,
     'bodyClass' => '',
     'langs' => [ 'login', 'common' ],
     'active' => 'login'

@@ -33,4 +33,9 @@ class Provider extends Model
 		}
 		return $results;
 	}
+
+	public function game()
+	{
+		return $this->hasMany(Slot::class, 'provider_id');
+	}
 }

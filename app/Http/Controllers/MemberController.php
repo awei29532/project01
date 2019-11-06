@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserEvent;
 use App\Http\Controllers\Controller;
 use App\Models\Account;
 use Illuminate\Http\Request;
@@ -37,7 +38,9 @@ class MemberController extends Controller
 
         $agent = $data['agent'] ?? '';
         if ($agent) {
-            $query->where('agent.username', 'like', "%$agent%");
+            $query->whereHas('agent', function ($q) use ($agent) {
+                $q->where('username', 'like', "%$agent%");
+            });
         }
 
         $res = $query->paginate($data['perPage']);
@@ -72,5 +75,10 @@ class MemberController extends Controller
         $user = Account::find($request->id);
         $user->status = $request->enabled;
         $user->save();
+
+        event(new UserEvent($request, 'event.member.enabled', [
+            'username' => $user->username,
+            'status' => $request->enabled,
+        ]));
     }
 }

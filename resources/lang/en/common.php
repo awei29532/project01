@@ -46,5 +46,9 @@ return [
     'lang' => [
         'zh-Hans' => 'Simplified Chinese',
         'en' => 'English'
-    ]
+    ],
+    'role' => 'Role',
+    'unknow-error' => 'An unknown error has occurred',
+    'empty-data' => 'Empty Data',
+    'export' => 'Export',
 ];

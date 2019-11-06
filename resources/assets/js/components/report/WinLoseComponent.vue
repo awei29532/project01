@@ -2,9 +2,9 @@
 <section>
     <list-grid :search="search" :paginate="false">
         <template slot="search-form">
-            <b-input-group class="mr-2 mb-1" :prepend="trans('report.agent')">
+            <b-input-group class="mr-2 mb-1" :prepend="trans('report.agent')" v-show="user.isAdmin || user.isAdminSub">
                 <b-form-select value="" @change.native="agentOnChange($event)">
-                    <option value="" v-if="userid == 0">{{trans('common.all')}}</option>
+                    <option value="">{{trans('common.all')}}</option>
                     <option v-for="item in agentOptions" :key="item.id" :value="item.id">
                         {{ item.username }}
                     </option>
@@ -28,14 +28,28 @@
             <b-input-group class="mr-2 mb-1">
                 <button class="btn btn-outline-primary mr-2" @click="handleTime('today')">{{trans('common.today')}}</button>
                 <button class="btn btn-outline-primary mr-2" @click="handleTime('yesterday')">{{trans('common.yesterday')}}</button>
-                <button class="btn btn-outline-primary mr-2" @click="handleTime('week')">{{trans('common.this_week')}}</button>
-                <button class="btn btn-outline-primary" @click="handleTime('month')">{{trans('common.this_month')}}</button>
+                <button class="btn btn-outline-primary mr-2" @click="handleTime('this_week')">{{trans('common.this_week')}}</button>
+                <button class="btn btn-outline-primary" @click="handleTime('this_month')">{{trans('common.this_month')}}</button>
             </b-input-group>
         </template>
         <template slot="table">
-            <b-table striped :items="winloseItems.data.rows" :fields="rows_fields" :busy="isLoading">
+            <b-table responsive bordered striped small
+                :items="winloseItems.data.rows" :fields="rows_fields" :busy="isLoading"
+                show-empty :empty-text="trans('common.empty-data')">
+                <loading slot="table-busy"></loading>
                 <template slot="#" slot-scope="data">
-                    {{ data.index + 1}}
+                    {{ data.index + 1 }}
+                </template>
+                <template slot="bet" slot-scope="data">
+                    {{ data.item.bet | numberFormat }}
+                </template>
+                <template slot="payout" slot-scope="data">
+                    {{ data.item.payout | numberFormat }}
+                </template>
+                <template slot="win" slot-scope="data">
+                    <section :class="'table-col-' + (data.item.win >= 0 ? 'greenNum' : 'redNum')">
+                        {{ data.item.win | numberFormat }}
+                    </section>
                 </template>
             </b-table>
         </template>
@@ -44,9 +58,23 @@
 	<div class="container-fluid">
         <div class="card">
             <div class="card-body">
-                <b-table striped :items="winloseItems.data.footer" :fields="footer_fields" :busy="isLoading">
+                <b-table responsive bordered striped small
+                    :items="winloseItems.data.footer" :fields="footer_fields" :busy="isLoading"
+                    show-empty :empty-text="trans('common.empty-data')">
+					<loading slot="table-busy"></loading>
                     <template slot="#" slot-scope="data">
-                        {{ data.index + 1}}
+                        {{ data.index + 1 }}
+                    </template>
+                    <template slot="bet" slot-scope="data">
+                        {{ data.item.bet | numberFormat }}
+                    </template>
+                    <template slot="payout" slot-scope="data">
+                        {{ data.item.payout | numberFormat }}
+                    </template>
+                    <template slot="win" slot-scope="data">
+                        <section :class="'table-col-' + (data.item.win >= 0 ? 'greenNum' : 'redNum')">
+                            {{ data.item.win | numberFormat }}
+                        </section>
                     </template>
                 </b-table>
             </div>
@@ -55,37 +83,35 @@
 </section>
 </template>
 <script>
-const luxon = require('luxon');
 
 export default {
-    props: ['userid'],
     data() {
         return {
             winloseItems: {
 				data: [],
             },
             rows_fields: [
-                '#',
-                {key: 'name', sortable: true, label: this.trans('report.winlose_name')},
-                {key: 'currency', label: this.trans('common.currency')},
-                {key: 'player', label: this.trans('report.player')},
-                {key: 'ticket', label: this.trans('report.tickets')},
-                {key: 'bet', label: this.trans('report.bet')},
-                {key: 'payout', label: this.trans('report.payout')},
-                {key: 'win', label: this.trans('report.win')},
-                {key: 'margin', label: this.trans('report.margin')},
-                {key: 'type', label: this.trans('report.type')},
+				{key: '#', thStyle: { width: '40px'}, class: 'text-center'},
+                {key: 'name', sortable: true, label: this.trans('report.winlose_name'), thClass: 'text-center'},
+                {key: 'currency', label: this.trans('common.currency'), class: 'table-col-cur'},
+                {key: 'player', label: this.trans('report.player'), thClass: 'text-center', class: 'text-right', thStyle: {minWidth: '70px'}},
+                {key: 'ticket', label: this.trans('report.tickets'), thClass: 'text-center', class: 'text-right'},
+                {key: 'bet', label: this.trans('report.bet'), thClass: 'text-center', class: 'table-col-num'},
+                {key: 'payout', label: this.trans('report.payout'), thClass: 'text-center', class: 'table-col-num'},
+                {key: 'win', label: this.trans('report.win'), thClass: 'text-center', class: 'table-col-num'},
+                {key: 'margin', label: this.trans('report.margin'), thClass: 'text-center', class: 'text-right'},
+                {key: 'type', label: this.trans('report.type'), thClass: 'text-center'},
             ],
             footer_fields: [
-                {key: ' ', sortable: true, label: ''},
-                {key: 'currency', label: this.trans('common.currency')},
-                {key: 'player', label: this.trans('report.player')},
-                {key: 'ticket', label: this.trans('report.tickets')},
-                {key: 'bet', label: this.trans('report.bet')},
-                {key: 'payout', label: this.trans('report.payout')},
-                {key: 'win', label: this.trans('report.win')},
-                {key: 'margin', label: this.trans('report.margin')},
-                {key: 'type', label: this.trans('report.type')},
+				{key: '#', thStyle: { width: '40px'}, class: 'text-center'},
+                {key: 'currency', label: this.trans('common.currency'), class: 'table-col-cur'},
+                {key: 'player', label: this.trans('report.player'), thClass: 'text-center', class: 'text-right', thStyle: {minWidth: '70px'}},
+                {key: 'ticket', label: this.trans('report.tickets'), thClass: 'text-center', class: 'text-right'},
+                {key: 'bet', label: this.trans('report.bet'), thClass: 'text-center', class: 'table-col-num'},
+                {key: 'payout', label: this.trans('report.payout'), thClass: 'text-center', class: 'table-col-num'},
+                {key: 'win', label: this.trans('report.win'), thClass: 'text-center'},
+                {key: 'margin', label: this.trans('report.margin'), thClass: 'text-center', class: 'text-right'},
+                {key: 'type', label: this.trans('report.type'), thClass: 'text-center'},
             ],
             isLoading: false,
             searchData: {
@@ -94,14 +120,16 @@ export default {
                 startedAt: '',
                 finishedAt: '',
             },
-            agentOptions: [],
+            agentOptions: this.getJsonData('agent-list'),
         };
     },
     mounted() {
-        this.agentOptions = JSON.parse(document.getElementById('agent-list').textContent);
         this.agentOptions.forEach(o => {
             this.searchData.agent.push(o.id);
         });
+        this.handleTime('today');
+        this.searchData.startedAt = '2019-07-01';
+        this.search();
     },
     methods: {
 		search() {
@@ -110,10 +138,9 @@ export default {
 			}
 			this.isLoading = true;
 
-			axios.post('/api/report/win_lose/list', this.searchData)
+			this.$ajax('POST', '/api/report/list/win_lose', this.searchData)
 			.then(res => {
-                this.winloseItems = res.data;
-                console.log(res.data);
+                this.winloseItems = res;
 				this.isLoading = false;
 			})
 			.catch(err => {
@@ -132,36 +159,10 @@ export default {
             }
         },
         handleTime(type) {
-            console.log(type);
-            let today = luxon.DateTime.local();
-            let start;
-            let end;
-            switch (type) {
-                case 'today':
-                    start = today.startOf('day');
-                    end   = today.endOf('day');
-                    break;
-                case 'yesterday':
-                    today = today.plus({ days: -1});
-                    start = today.startOf('day');
-                    end   = today.endOf('day');
-                    break;
-                case 'week':
-                    today = today.endOf('week').plus({ days: -1});
-                    end   = today.endOf('day');
-                    today = today.startOf('week').plus({ days: -1});
-                    start = today.startOf('day');
-                    break;
-                case 'month':
-                    today = today.endOf('month');
-                    end   = today.endOf('day');
-                    today = today.startOf('month');
-                    start = today.startOf('day');
-                    break;
-            }
-            this.searchData.startedAt = start.toFormat('yyyy-MM-dd');
-            this.searchData.finishedAt = end.toFormat('yyyy-MM-dd');
+            const range = this.getDatetimeRange(type, 'yyyy-MM-dd');
+            this.searchData.startedAt  = range[0];
+            this.searchData.finishedAt = range[1];
         }
-    }
+    },
 }
 </script>

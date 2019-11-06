@@ -6,7 +6,7 @@
                 <b-form-group label-cols-md="1" :label="trans('common.username')" label-for="username">
                     <b-input-group>
                         <b-input-group-text slot="append" v-if="subid == 0">
-                            @{{data.agent ? data.agent : 'admin'}}
+                            @{{user.username}}
                         </b-input-group-text>
                         <b-form-input id="username"
                             type="text"
@@ -15,10 +15,10 @@
                             :disabled="subid != 0"
                             required
                         ></b-form-input>
+                        <b-form-invalid-feedback>
+                            {{errors['username']}}
+                        </b-form-invalid-feedback>
                     </b-input-group>
-                    <b-form-invalid-feedback>
-                        {{errors['username']}}
-                    </b-form-invalid-feedback>
                 </b-form-group>
                 <b-form-group label-cols-md="1" :label="trans('common.password')" label-for="password">
                     <b-form-input id="password"
@@ -77,7 +77,7 @@ export default {
         // handle agent data
         if (this.subid != 0) {
             this.data = {
-                ...JSON.parse(document.getElementById('sub-data').textContent),
+                ...this.getJsonData('sub-data'),
                 id: this.subid,
             };
         }
@@ -87,7 +87,7 @@ export default {
             e.preventDefault();
             this.errors = [];
             let $url = this.subid == 0 ? '/api/accounts/sub_account/add' : '/api/accounts/sub_account/edit';
-            axios.post($url, this.data)
+            this.$ajax('POST', $url, this.data)
             .then(res => {
                 location.href = '/accounts/sub_account';
             })

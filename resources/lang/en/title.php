@@ -28,4 +28,6 @@ return [
     'game_add' => 'Game Add',
     'game_edit' => 'Game Edit',
     'all_report_sw' => 'All Report Single Wallet',
+    'users' => 'Users',
+    'log' => 'History Log',
 ];

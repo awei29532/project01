@@ -2,7 +2,7 @@
 	<section>
 		<list-grid :data="agentItems" :search="search">
 			<template slot="search-form">
-				<a class="btn btn-info mr-2 mb-1" href="/accounts/agent-edit/">{{trans('common.add')}}</a>
+				<a v-if="user.isAdmin" class="btn btn-info mr-2 mb-1" href="/accounts/agent-edit/">{{trans('common.add')}}</a>
 				<b-input-group class="mr-2 mb-1" :prepend="trans('common.status')">
 					<b-form-select v-model="searchData.status">
 						<option value="all">{{trans('common.all')}}</option>
@@ -16,13 +16,16 @@
 			</template>
 
 			<template slot="table">
-				<b-table striped :items="agentItems.data" :fields="fields" :busy="isLoading">
+				<b-table responsive bordered striped small
+					:items="agentItems.data" :fields="fields" :busy="isLoading"
+					show-empty :empty-text="trans('common.empty-data')">
+					<loading slot="table-busy"></loading>
 					<template slot="#" slot-scope="data">
-						{{data.index + 1}}
+						{{data.index + 1 + agentItems.perPage * (agentItems.page - 1)}}
 					</template>
 					<template slot="status" slot-scope="data">
-						<button :class="'btn-pill btn-' + (data.item.status ? 'success' : 'danger')"
-							@click="enableMsgDialog(data.item)">
+						<button :class="'btn-pill btn-sm btn-' + (data.item.status ? 'success' : 'danger')"
+							@click="enabledDialog(data.item.id, data.item.username, data.item.status, enabled)">
 								{{ trans('common.' + (data.item.status ? 'active' : 'suspended')) }}
 						</button>
 					</template>
@@ -40,16 +43,16 @@ export default {
     data() {
         return {
 			fields: [
-				'#',
-				{key: 'username', sortable: true, label: this.trans('common.username')},
-				{key: 'name', sortable: true, label: this.trans('common.name')},
-				{key: 'currency', label: this.trans('common.currency')},
-				{key: 'products', label: this.trans('agents.products')},
-				{key: 'members', sortable: true, label: this.trans('agents.members')},
-				{key: 'remark', label: this.trans('common.remark')},
-				{key: 'status', sortable: true, label: this.trans('common.status')},
-				{key: 'updated_at', sortable: true, label: this.trans('common.updated_at')},
-				{key: 'created_at', sortable: true, label: this.trans('common.created_at')},
+				{key: '#', thStyle: { width: '40px'}, class: 'text-center'},
+				{key: 'username', sortable: true, label: this.trans('common.username'), thClass: 'text-center', class: 'table-col-other'},
+				{key: 'name', sortable: true, label: this.trans('common.name'), thClass: 'text-center', class: 'table-col-other'},
+				{key: 'currency', label: this.trans('common.currency'), class: 'table-col-cur'},
+				{key: 'products', label: this.trans('agents.products'), thClass: 'text-center', class: 'table-col-other'},
+				{key: 'members', sortable: true, label: this.trans('agents.members'), class: 'text-right', thClass: 'text-center', thStyle: { minWidth: '70px'}},
+				{key: 'remark', label: this.trans('common.remark'), thClass: 'text-center', class: 'table-col-other'},
+				{key: 'status', sortable: true, label: this.trans('common.status'), class: 'table-col-status'},
+				{key: 'updated_at', sortable: true, label: this.trans('common.updated_at'), class: 'table-col-time'},
+				{key: 'created_at', sortable: true, label: this.trans('common.created_at'), class: 'table-col-time'},
 			],
 			agentItems: {
 				data: [],
@@ -65,7 +68,6 @@ export default {
 				perPage: 25,
 			},
 			isLoading: false,
-			enabledAgentData: {},
 		}
 	},
     mounted() {
@@ -81,9 +83,9 @@ export default {
 			this.searchData.page = page;
 			this.searchData.perPage = Number(perPage);
 
-			axios.post('/api/accounts/agent/list', this.searchData)
+			this.$ajax('POST', '/api/accounts/agent/list', this.searchData)
 			.then(res => {
-				this.agentItems = res.data;
+				this.agentItems = res;
 				this.isLoading = false;
 			})
 			.catch(err => {
@@ -91,31 +93,19 @@ export default {
 			})
 		},
 		enabled(id, enabled) {
-			axios.post('/api/accounts/agent/toggle-enabled', {
+			this.isLoading = true;
+			this.$ajax('POST', '/api/accounts/agent/toggle-enabled', {
 				id: id,
 				enabled: enabled,
 			})
 			.then(res => {
-				this.search();
+				this.agentItems.data.filter(o => o.id == id)[0].status = enabled;
+				this.isLoading = false;
 			})
 			.catch(err => {
 				console.error(err); 
 			})
 		},
-		enableMsgDialog(data) {
-			let msg = this.trans('common.' + (data.status ? 'suspended' : 'active')) + ' ' + data.username; 
-			this.$bvModal.msgBoxConfirm(msg, {
-				okTitle: this.trans('common.ok'),
-				cancelTitle: this.trans('common.cancel'),
-			}).
-			then(value => {
-				if (value) {
-					this.enabled(data.id, data.status ? 0 : 1);
-				}
-			}).catch(err => {
-				console.warn(err);
-			});
-		},
-	}
+	},
 };
 </script>

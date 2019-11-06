@@ -6,6 +6,7 @@
 
 @section('content')
     <script id="agent-list" type="application/json">@json($agents)</script>
+    <script id="game-list" type="application/json">@json($games)</script>
     @include('layouts.breadcrumb', [
         'cur' => "bet_history",
         'pageArr' => [
@@ -15,5 +16,5 @@
             ],
         ]
     ])
-    <bethistory-component :userid="{{ $userAgentId }}"></bethistory-component>
+    <bethistory-component></bethistory-component>
 @endsection

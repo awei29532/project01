@@ -2,8 +2,16 @@
 <section>
     <list-grid :data="walletItems" :search="search">
         <template slot="search-form">
+            <b-input-group class="mr-2 mb-1" :prepend="trans('report.agent')" v-show="user.isAdmin">
+                <b-form-select value="" @change.native="agentOnChange($event.target.value)">
+                    <option value="">{{trans('common.all')}}</option>
+                    <option v-for="item in agentOptions" :key="item.id" :value="item.id">
+                        {{ item.username }}
+                    </option>
+                </b-form-select>
+            </b-input-group>
             <b-input-group class="mr-2 mb-1" :prepend="trans('report.provider')">
-                <b-form-select value="" @change.native="providerOnChange($event)">
+                <b-form-select v-model="providerId" @change.native="providerOnChange($event.target.value)">
                     <option value="">{{trans('common.all')}}</option>
                     <option v-for="item in providerOptions" :key="item.id" :value="item.id">
                         {{ item.name }}
@@ -11,10 +19,10 @@
                 </b-form-select>
             </b-input-group>
             <b-input-group class="mr-2 mb-1" :prepend="trans('report.game')">
-                <b-form-select @change.native="gameOnChange($event)">
+                <b-form-select v-model="searchData.game" :disabled="providerId == ''">
                     <option value="">{{trans('common.all')}}</option>
-                    <option v-for="item in gameOptions" :key="item.id" :value="item.id">
-                        {{ item.name }}
+                    <option v-for="game in gameOptions" :key="game.id" :value="game.game_id">
+                        {{ game.name }}
                     </option>
                 </b-form-select>
             </b-input-group>
@@ -26,17 +34,18 @@
             </b-input-group>
         </template>
         <template slot="table">
-            <b-table striped :items="walletItems.data" :fields="fields" :busy="isLoading">
+            <b-table responsive bordered striped small
+                :items="walletItems.data" :fields="fields" :busy="isLoading"
+                show-empty :empty-text="trans('common.empty-data')">
+                <loading slot="table-busy"></loading>
                 <template slot="#" slot-scope="data">
-                    {{data.index + 1}}
+                    {{data.index + 1 + walletItems.perPage * (walletItems.page - 1)}}
                 </template>
                 <template slot="deposit" slot-scope="data">
-                    <button class="btn btn-info" @click="deposit(data.item)">{{trans('report.deposit')}}</button>
+                    <button class="btn btn-sm btn-info" @click="deposit(data.item.id)" :disabled="data.item.status == 1">{{trans('report.deposit')}}</button>
                 </template>
-                <template slot="status" slot-scope="data">
-                    <span :class="'badge badge-' + (data.item.status == 1 ? 'success' : 'danger')">
-                        {{ trans('common.' + (data.item.status == 1 ? 'active' : 'suspended')) }}
-                    </span>
+                <template slot="amount" slot-scope="data">
+                    {{ data.item.amount | numberFormat }}
                 </template>
             </b-table>
         </template>
@@ -45,7 +54,6 @@
 </template>
 <script>
 export default {
-    props: ['userid'],
     data() {
         return {
             walletItems: {
@@ -56,38 +64,39 @@ export default {
 				lastPage: 1,
             },
             fields: [
-                '#',
-                {key: 'provider', sortable: true, label: this.trans('report.provider')},
-                {key: 'agent', sortable: true, label: this.trans('report.agent')},
-                {key: 'account', sortable: true, label: this.trans('common.account')},
-                {key: 'game', sortable: true, label: this.trans('report.game')},
-                {key: 'amount', sortable: true, label: this.trans('report.amount')},
-                {key: 'status', sortable: true, label: this.trans('common.status')},
-                {key: 'datetime', sortable: true, label: this.trans('common.datetime')},
-                {key: 'deposit', label:this.trans('report.deposit')},
+				{key: '#', thStyle: { width: '40px'}, class: 'text-center'},
+                {key: 'provider', sortable: true, label: this.trans('report.provider'), thClass: 'text-center', class: 'table-col-other'},
+                {key: 'agent', sortable: true, label: this.trans('report.agent'), thClass: 'text-center', class: 'table-col-other'},
+                {key: 'account', sortable: true, label: this.trans('common.account'), thClass: 'text-center', class: 'table-col-other'},
+                {key: 'game', sortable: true, label: this.trans('report.game'), thClass: 'text-center', class: 'table-col-other'},
+                {key: 'amount', sortable: true, label: this.trans('report.amount'), thClass: 'text-center', class: 'table-col-num'},
+                {key: 'datetime', sortable: true, label: this.trans('common.datetime'), class: 'table-col-time'},
+                {key: 'deposit', label:this.trans('report.deposit'), class: 'text-center', thStyle: {minWidth: '80px'}},
             ],
             isLoading: false,
             searchData: {
+                agents: [],
                 providers: [],
-                games: [],
+                game: '',
                 status: 1,
 				page: 1,
 				perPage: 25,
             },
+            agentOptions: this.getJsonData('agent-list'),
+            allGames: this.getJsonData('game-list'),
             gameOptions: [],
-            providerOptions: [],
+            providerOptions: this.getJsonData('provider-list'),
+            providerId: '',
         };
     },
     mounted() {
-        this.gameOptions = JSON.parse(document.getElementById('game-list').textContent);
-        this.gameOptions.forEach(o => {
-            this.searchData.games.push(o.id);
-        });
-
-        this.providerOptions = JSON.parse(document.getElementById('provider-list').textContent);
         this.providerOptions.forEach(o => {
             this.searchData.providers.push(o.id);
         });
+        this.agentOptions.forEach(o => {
+            this.searchData.agents.push(o.id);
+        });
+        this.search();
     },
     methods: {
 		search(page = 1, perPage = 25) {
@@ -99,39 +108,49 @@ export default {
 			this.searchData.page = page;
 			this.searchData.perPage = Number(perPage);
 
-			axios.post('/api/report/wallet/list', this.searchData)
+			this.$ajax('POST', '/api/report/list/wallet', this.searchData)
 			.then(res => {
-                this.walletItems = res.data;
+                this.walletItems = res;
 				this.isLoading = false;
 			})
 			.catch(err => {
 				console.error(err); 
 			})
         },
-        gameOnChange(event) {
-            this.searchData.games = [];
-            let id = event.target.value;
+        agentOnChange(id) {
+            this.searchData.agents = [];
             if (id) {
-                this.searchData.games.push(id);
+                this.searchData.agents.push(id);
             } else {
                 this.agentOptions.forEach(o => {
-                    this.searchData.games.push(o.id);
+                    this.searchData.agents.push(o.id);
                 });
             }
         },
-        providerOnChange(event) {
+        providerOnChange(id) {
             this.searchData.providers = [];
-            let id = event.target.value;
             if (id) {
                 this.searchData.providers.push(id);
             } else {
-                this.agentOptions.forEach(o => {
+                this.providerOptions.forEach(o => {
                     this.searchData.providers.push(o.id);
                 });
             }
+
+            const provider = this.allGames.filter(o => o.id == id);
+            this.gameOptions = provider.length ? provider[0].games : [];
+            this.searchData.game = '';
         },
-        deposit(data) {
-            console.log(data);
+        deposit(id) {
+            this.$ajax('POST', '/api/report/wallet/deposit', {
+                wallet_id: id,
+            })
+            .then(res => {
+                console.log(res)
+            })
+            .catch(err => {
+                console.error(err); 
+            })
         }
     }
 }

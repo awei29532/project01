@@ -10,7 +10,7 @@ let mix = require('laravel-mix');
  | file for the application as well as bundling up all the JS files.
  |
  */
-Mix.manifest.refresh = _ => void 0; // 不產生 mix-manifest.json
+// Mix.manifest.refresh = _ => void 0; // 不產生 mix-manifest.json
 mix.babelConfig({
    plugins: ['syntax-dynamic-import']
 });
@@ -22,6 +22,10 @@ mix.js('resources/assets/js/app.js', 'public/js')
 
 mix.webpackConfig({
    output: {
-      chunkFilename: 'js/[name].js'
+      chunkFilename: 'js/[name].js?id=[hash]'
    }
 });
+
+if (mix.inProduction()) {
+   mix.version();
+}

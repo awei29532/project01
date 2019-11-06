@@ -15,5 +15,5 @@
             ],
         ]
     ])
-    <allreport-component :userid="{{ $userAgentId }}"></allreport-component>
+    <allreport-component></allreport-component>
 @endsection

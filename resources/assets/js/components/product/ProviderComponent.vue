@@ -2,8 +2,8 @@
     <section>
         <list-grid :data="providerItems" :search="search">
             <template slot="search-form">
-				<a class="btn btn-info mr-2" href="/products/provider-edit/">{{trans('common.add')}}</a>
-                <b-input-group class="mr-2 mb -1" :prepend="trans('common.name')">
+				<a v-if="user.isAdmin" class="btn btn-info mr-2 mb-1" href="/products/provider-edit/">{{trans('common.add')}}</a>
+                <b-input-group class="mr-2 mb-1" :prepend="trans('common.name')">
                     <b-input v-model="searchData.name"></b-input>
                 </b-input-group>
 				<b-input-group class="mr-2 mb-1" :prepend="trans('common.status')">
@@ -16,19 +16,19 @@
             </template>
 
             <template slot="table">
-                <b-table :items="providerItems.data" :busy="isLoading" :fields="fields">
-                    <div slot="table-busy" class="text-center text-danger my-2">
-                        <strong>Loading...</strong>
-                    </div>
+                <b-table responsive bordered striped small
+					:items="providerItems.data" :busy="isLoading" :fields="fields"
+					show-empty :empty-text="trans('common.empty-data')">
+					<loading slot="table-busy"></loading>
                     <template slot="#" slot-scope="data">
-                        {{data.index + 1}}
+                        {{data.index + 1 + providerItems.perPage * (providerItems.page - 1)}}
                     </template>
                     <template slot="name" slot-scope="data">
                         <a :href="'/products/provider-edit/' + data.item.id">{{data.item.name}}</a>
                     </template>
                     <template slot="status" slot-scope="data">
-                        <button :class="'btn-pill btn-' + (data.item.status ? 'success' : 'danger')"
-                            @click="enableMsgDialog(data.item)">
+                        <button :class="'btn-pill btn-sm btn-' + (data.item.status ? 'success' : 'danger')"
+							@click="enabledDialog(data.item.id, data.item.name, data.item.status, enabled)">
                                 {{ trans('common.' + (data.item.status ? 'active' : 'suspended')) }}
                         </button>
                     </template>
@@ -44,14 +44,14 @@ export default {
         return {
             providerItems: {},
 			fields: [
-				'#',
-				{key: 'name', sortable: true, label: this.trans('common.name')},
-				{key: 'code', sortable: true, label: this.trans('providers.code')},
-                {key: 'status', sortable: true, label: this.trans('common.status')},
-                {key: 'maintenance_start', sortable: true, label: this.trans('providers.maintenance_start')},
-                {key: 'maintenance_end', sortable: true, label: this.trans('providers.maintenance_end')},
-				{key: 'updated_at', sortable: true, label: this.trans('common.updated_at')},
-				{key: 'created_at', sortable: true, label: this.trans('common.created_at')},
+				{key: '#', thStyle: { width: '40px'}, class: 'text-center'},
+				{key: 'name', sortable: true, label: this.trans('common.name'), thClass: 'text-center', thStyle: {minWidth: '55px'}},
+				{key: 'code', sortable: true, label: this.trans('providers.code'), thClass: 'text-center', thStyle: {minWidth: '60px'}},
+                {key: 'status', sortable: true, label: this.trans('common.status'), class: 'table-col-status'},
+                {key: 'maintenance_start', sortable: true, label: this.trans('providers.maintenance_start'), class: 'table-col-time'},
+                {key: 'maintenance_end', sortable: true, label: this.trans('providers.maintenance_end'), class: 'table-col-time'},
+				{key: 'updated_at', sortable: true, label: this.trans('common.updated_at'), class: 'table-col-time'},
+				{key: 'created_at', sortable: true, label: this.trans('common.created_at'), class: 'table-col-time'},
 			],
             isLoading: false,
             searchData: {
@@ -73,9 +73,9 @@ export default {
 			this.searchData.page = page;
 			this.searchData.perPage = Number(perPage);
 
-			axios.post('/api/products/provider/list', this.searchData)
+			this.$ajax('POST', '/api/products/provider/list', this.searchData)
 			.then(res => {
-				this.providerItems = res.data;
+				this.providerItems = res;
 				this.isLoading = false;
 			})
 			.catch(err => {
@@ -83,30 +83,16 @@ export default {
 			})
 		},
 		enabled(id, enabled) {
-			axios.post('/api/products/provider/toggle-enabled', {
+			this.$ajax('POST', '/api/products/provider/toggle-enabled', {
 				id: id,
 				enabled: enabled,
 			})
 			.then(res => {
-				this.search();
+				this.providerItems.data.filter(o => o.id == id)[0].status = enabled;
 			})
 			.catch(err => {
 				console.error(err); 
 			})
-		},
-		enableMsgDialog(data) {
-			let msg = this.trans('common.' + (data.status ? 'suspended' : 'active')) + ' ' + data.name; 
-			this.$bvModal.msgBoxConfirm(msg, {
-				okTitle: this.trans('common.ok'),
-				cancelTitle: this.trans('common.cancel'),
-			}).
-			then(value => {
-				if (value) {
-					this.enabled(data.id, data.status ? 0 : 1);
-				}
-			}).catch(err => {
-				console.warn(err);
-			});
 		},
     },
 }

@@ -9,13 +9,13 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-
-    <link rel="stylesheet" href="/css/app.css">
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="{{ mix('/css/app.css') }}">
 </head>
 
 <body class="{{ isset($bodyClass) ? $bodyClass : 'app header-fixed sidebar-fixed sidebar-show breadcrumb-fixed' }}">
     <div id="app" style="display:contents">
-        @if (isset($isLogin) && $isLogin)
+        @if (isset($loginPage) && $loginPage)
             @yield('content')
         @else
             @include('layouts.header')
@@ -34,8 +34,25 @@
         @else
             window.i18n = {};
         @endif
+        
+        @if (!isset($loginPage) || !$loginPage)
+            var user = @json(Auth::user());
+            var isAdmin = {{ Auth::user()->hasRole('admin') ? 'true' : 'false' }};
+            var isAdminSub = {{ Auth::user()->hasRole('admin_sub') ? 'true' : 'false' }};
+        @endif
+        
+        window.changeLang = function (lang) {
+            axios.get('/lang', {
+                params: {
+                    lang: lang,
+                }
+            }).then(res => {
+                location.reload();
+            });
+        }
+        
     </script>
-    <script src="/js/app.js"></script>
+    <script src="{{mix('/js/app.js')}}"></script>
 </body>
 
 </html>

@@ -124,15 +124,15 @@
                 </b-form-group>
                 <b-form-group label-cols-md="1" :label="trans('agents.edit_page.provider_config')">
                     <div class="row">
-                        <b-form-group class="col-3" v-for="item in providerList" :key="item.id" :label="item.name" :label-for="'provider-' + item.code">
+                        <b-form-group class="col-3" v-for="item in data.configs" :key="item.id" :label="item.name" :label-for="'provider-' + item.code">
                             <b-input-group>
                                 <b-input-group-prepend is-text>
-                                    <input type="checkbox" v-model="data.configs[item.code].status">
+                                    <input type="checkbox" v-model="item.status">
                                 </b-input-group-prepend>
                                 <b-form-input :id="'provider-' + item.code"
                                     type="number"
-                                    :disabled="!data.configs[item.code].status" 
-                                    v-model="data.configs[item.code].percent"
+                                    :disabled="!item.status" 
+                                    v-model="item.percent"
                                     :state="handleErrors('configs.' + item.name + '.percent')"
                                 ></b-form-input>
                             </b-input-group>
@@ -175,39 +175,30 @@ export default {
                 url_rollback: '',
                 configs: {},
             },
-            currencyOptions: [],
-            providerList: [],
+            currencyOptions: this.getJsonData('currency-list'),
             errors: [],
+            isLoading: false,
         };
     },
     mounted() {
-        this.currencyOptions = JSON.parse(document.getElementById('currency-list').textContent);
-        this.providerList = JSON.parse(document.getElementById('provider-list').textContent);
-
-        // handle agent data
-        if (this.agentid != 0) {
-            this.data = {
-                id: this.agentid,
-                ...JSON.parse(document.getElementById('agent-data').textContent),
-            };
-        } else {
-            this.providerList.forEach((p) => {
-                this.data.configs[p.code] = {
-                    id: p.id,
-                    status: p.status,
-                    percent: 0,
-                };
-            });
-        }
+        this.data = {
+            id: this.agentid,
+            ...this.getJsonData('agent-data'),
+        };
     },
     methods: {
         send: function (e) {
             e.preventDefault();
+            if (this.isLoading) {
+                return;
+            }
+            this.isLoading = true;
             this.errors = [];
             let $url = this.agentid == 0 ? '/api/accounts/agent/add' : '/api/accounts/agent/edit';
-            axios.post($url, this.data)
+            this.$ajax('POST', $url, this.data)
             .then(res => {
                 location.href = '/accounts/agent';
+                this.isLoading = false;
             })
             .catch(err => {
                 if (err.response.status == 422){

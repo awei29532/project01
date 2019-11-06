@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserEvent;
 use App\Models\Provider;
 use Illuminate\Http\Request;
 
@@ -49,6 +50,11 @@ class ProviderController extends Controller
         $provider->maintenance_start = $request->maintenance_start;
         $provider->maintenance_end = $request->maintenance_end;
         $provider->save();
+
+        event(new UserEvent($request, 'event.provider.add', [
+            'name' => $request->name,
+            'code' => $request->code,
+        ]));
     }
 
     public function providerEditView($id = 0)
@@ -71,6 +77,12 @@ class ProviderController extends Controller
         $provider->maintenance_start = $request->maintenance_start;
         $provider->maintenance_end = $request->maintenance_end;
         $provider->save();
+
+        event(new UserEvent($request, 'event.provider.edit', [
+            'name' => $request->name,
+            'maintenance_start' => $request->maintenance_start,
+            'maintenance_end' => $request->maintenance_end,
+        ]));
     }
 
     public function toggleEnabled(Request $request)
@@ -83,6 +95,11 @@ class ProviderController extends Controller
         $provider = Provider::find($request->id);
         $provider->status = $request->enabled;
         $provider->save();
+
+        event(new UserEvent($request, 'event.provider.enabled', [
+            'name' => $provider->name,
+            'status' => $request->enabled,
+        ]));
     }
 
     private function validation($data, $type = 'add')

@@ -59,7 +59,7 @@ export default {
         submit(e) {
             e.preventDefault();
             this.errors = [];
-            axios.post('/api/change-password', this.data).then(res => {
+            this.$ajax('POST', '/api/change-password', this.data).then(res => {
                 location.href = '/login';
             }).catch(err => {
                 if (err.response.status == 422){

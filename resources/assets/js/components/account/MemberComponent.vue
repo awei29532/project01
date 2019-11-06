@@ -17,13 +17,16 @@
 			</b-input-group>
         </template>
         <template slot="table">
-            <b-table striped :items="memberItems.data" :fields="fields" :busy="isLoading">
+            <b-table responsive bordered striped small
+				:items="memberItems.data" :fields="fields" :busy="isLoading"
+				show-empty :empty-text="trans('common.empty-data')">
+				<loading slot="table-busy"></loading>
 				<template slot="#" slot-scope="data">
-					{{data.index + 1}}
+					{{data.index + 1 + memberItems.perPage * (memberItems.page - 1)}}
 				</template>
                 <template slot="status" slot-scope="data">
-					<button :class="'btn-pill btn-' + (data.item.status ? 'success' : 'danger')"
-						@click="enableMsgDialog(data.item)">
+					<button :class="'btn-pill btn-sm btn-' + (data.item.status ? 'success' : 'danger')"
+						@click="enabledDialog(data.item.id, data.item.username, data.item.status, enabled)">
 							{{ trans('common.' + (data.item.status ? 'active' : 'suspended')) }}
 					</button>
 				</template>
@@ -37,14 +40,14 @@ export default {
     data() {
         return {
             fields: [
-                '#',
-                {key: 'username', sortable: true, label: this.trans('common.username')},
-                {key: 'agent', sortable: true, label: this.trans('members.agent')},
-                {key: 'currency', sortable: true, label: this.trans('common.currency')},
-                {key: 'balance', sortable: true, label: this.trans('members.balance')},
-                {key: 'status', sortable: true, label: this.trans('common.status')},
-                {key: 'updated_at', sortable: true, label: this.trans('common.updated_at')},
-                {key: 'created_at', sortable: true, label: this.trans('common.created_at')},
+				{key: '#', thStyle: { width: '40px'}, class: 'text-center'},
+                {key: 'username', sortable: true, label: this.trans('common.username'), thClass: 'text-center'},
+                {key: 'agent', sortable: true, label: this.trans('members.agent'), thClass: 'text-center', thStyle: {minWidth: '125px'}},
+                {key: 'currency', sortable: true, label: this.trans('common.currency'), class: 'table-col-cur'},
+                {key: 'balance', sortable: true, label: this.trans('members.balance'), thClass: 'text-center', class: 'text-right'},
+                {key: 'status', sortable: true, label: this.trans('common.status'), class: 'table-col-status'},
+                {key: 'updated_at', sortable: true, label: this.trans('common.updated_at'), class: 'table-col-time'},
+                {key: 'created_at', sortable: true, label: this.trans('common.created_at'), class: 'table-col-time'},
             ],
             memberItems: {
 				data: [],
@@ -60,7 +63,7 @@ export default {
                 page: 1,
 				perPage: 25,
             },
-            enabledMemberData: {},
+			isLoading: false,
         };
     },
     mounted() {
@@ -76,9 +79,9 @@ export default {
 			this.searchData.page = page;
 			this.searchData.perPage = Number(perPage);
 
-			axios.post('/api/accounts/member/list', this.searchData)
+			this.$ajax('POST', '/api/accounts/member/list', this.searchData)
 			.then(res => {
-				this.memberItems = res.data;
+				this.memberItems = res;
 				this.isLoading = false;
 			})
 			.catch(err => {
@@ -86,27 +89,18 @@ export default {
 			})
 		},
 		enabled(id, enabled) {
-			axios.post('/api/accounts/member/toggle-enabled', {
+			this.isLoading = true;
+			this.$ajax('POST', '/api/accounts/member/toggle-enabled', {
 				id: id,
 				enabled: enabled,
 			})
 			.then(res => {
-				this.search();
+				this.memberItems.data.filter(o => o.id == id)[0].status = enabled;
+				this.isLoading = false;
 			})
 			.catch(err => {
 				console.error(err); 
 			})
-		},
-		enableMsgDialog(data) {
-			let msg = this.trans('common.' + (data.status ? 'suspended' : 'active')) + ' ' + data.username; 
-			this.$bvModal.msgBoxConfirm(msg).
-			then(value => {
-				if (value) {
-					this.enabled(data.id, data.status ? 0 : 1);
-				}
-			}).catch(err => {
-				console.warn(err);
-			});
 		},
     }
 }

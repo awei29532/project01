@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserEvent;
 use App\Models\Slot;
 use DB;
 use Curl\Curl;
@@ -90,6 +91,11 @@ class GameController extends Controller
         $slot->has_fun = $request->has_fun;
         $slot->status = 1;
         $slot->save();
+
+        event(new UserEvent($request, 'event.game.add', [
+            'provider' => $provider->name,
+            'name' => $slot->name,
+        ]));
     }
 
     public function gameEditView($id = 0)
@@ -118,6 +124,11 @@ class GameController extends Controller
         $slot->name = $request->name;
         $slot->has_fun = $request->has_fun;
         $slot->save();
+
+        event(new UserEvent($request, 'event.game.edit', [
+            'name' => $slot->name,
+            'has_fun' => $request->has_fun,
+        ]));
     }
 
     public function toggleEnabled(Request $request)
@@ -130,6 +141,11 @@ class GameController extends Controller
         $slot = Slot::find($request->id);
         $slot->status = $request->enabled;
         $slot->save();
+
+        event(new UserEvent($request, 'event.game.enabled', [
+            'name' => $slot->name,
+            'status' => $request->enabled,
+        ]));
     }
 
     private function validation($data, $type)
@@ -149,7 +165,7 @@ class GameController extends Controller
         $data->validate($validation);
     }
 
-    public function updateGameList()
+    public function updateGameList(Request $request)
     {
         $provider_id = request()->input('id');
 
@@ -238,5 +254,7 @@ class GameController extends Controller
         $games_value = implode(', ', $games_str_arr);
         $sql = "REPLACE INTO `Slot` ( {$colums_str} ) VALUE {$games_value} ";
         DB::update($sql);
+
+        event(new UserEvent($request, 'event.game.update-game-list'));
     }
 }

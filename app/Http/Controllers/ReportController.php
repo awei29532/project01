@@ -56,44 +56,19 @@ class ReportController extends Controller
         }
     }
 
-    public function getIdsByTimeRange($table, $id_column, $time_column, $from = '', $to = '')
-    {
-        if (!$from) {
-            $from = date('Y-m-d');
-        }
-        if (!$to) {
-            $to = date('Y-m-d');
-        }
-        $id_raw = DB::raw("$id_column AS id");
-        $start = DB::table($table)
-            ->select($id_raw)
-            ->where($time_column, '>=', $from)
-            ->first();
-        if (!isset($start->id)) {
-            return false;
-        }
-        $end = DB::table($table)
-            ->select($id_raw)
-            ->where($time_column, '<=', $to)
-            ->orderBy($id_column, 'DESC')
-            ->first();
-        if (!isset($end->id)) {
-            return false;
-        }
-        return [$start->id, $end->id];
-    }
-
     public function getAgentsForView()
     {
         $user = Auth::user();
 
-        if ($user->agent_id == 0) {
+        if ($user->hasRole('admin')) {
             return Agent::select(['id', 'username'])->get();
         }
 
         return [
-            'id' => $user->id,
-            'username' => $user->username,
+            [
+                'id' => $user->agent_id,
+                'username' => $user->username,
+            ]
         ];
     }
 
@@ -111,12 +86,20 @@ class ReportController extends Controller
 
     protected function getGameForView()
     {
-        $res = Slot::get();
+        $res = Provider::with('game')->get();
 
-        return $res->map(function ($row) {
+        return $res->map(function ($p) {
             return [
-                'id' => $row->game_id,
-                'name' => $row->namecn,
+                'id' => $p->id,
+                'name' => $p->name,
+                'games' => $p->game->map(function ($g) {
+                    return [
+                        'id' => $g->id,
+                        'game_id' => $g->game_id,
+                        'code' => $g->game_code,
+                        'name' => $g->name,
+                    ];
+                }),
             ];
         });
     }
@@ -124,8 +107,8 @@ class ReportController extends Controller
     public function betHistoryView()
     {
         return view('report.bet_history', [
-            'userAgentId' => Auth::user()->agent_id,
             'agents' => $this->getAgentsForView(),
+            'games' => $this->getGameForView(),
         ]);
     }
 
@@ -134,79 +117,50 @@ class ReportController extends Controller
         # new check
         $request->validate([
             'agent' => 'required|array',
-            'agent.*' => 'exists:agent,id',
-            'member' => 'nullable|string',
             'startedAt' => 'nullable|date_format:"Y-m-d H:i:s"',
             'finishedAt' => 'nullable|date_format:"Y-m-d H:i:s"',
         ]);
 
         $user = Auth::user();
-        if ($user->agent_id != 0) {
+        if ($user->hasRole(['agent', 'agent_sub'])) {
             if ($request->agent[0] != $user->agent_id) {
                 abort(403, 'Unauthorized action.');
             }
         }
 
-        $agents = $request->agent;
-
-        $range_ids = $this->getIdsByTimeRange('wager', 'id', 'datetime', $request->startedAt, $request->finishedAt);
-        if (!$range_ids) {
-            return response([
-                'data' => null,
-            ]);
-        }
         $conditions = [];
+        $conditions[] = ['status', '=', 1];
         if (strlen($request->member) > 0) {
             $conditions[] = ['username', 'like', "%$request->member%"];
         }
-        $conditions[] = ['id', '>=', $range_ids[0]];
-        $conditions[] = ['id', '<=', $range_ids[1]];
-        $conditions[] = ['status', '=', 1];
-        $roundNum = 2;
 
+        if ($request->game) {
+            $conditions[] = ['provider_id', $request->game['providerId']];
+            $conditions[] = ['game_code', $request->game['gameId']];
+        }
+        
+        if ($request->startedAt) {
+            $conditions[] = ['datetime', '>=', $request->startedAt];
+        }
+        
+        if ($request->finishedAt) {
+            $conditions[] = ['datetime', '<=', $request->finishedAt];
+        }
+        
+        $agents = $request->agent;
         $res = Wager::with(['agent', 'account'])
             ->where($conditions)
             ->whereIn('agent_id', $agents)
-            ->orderBy('id', 'DESC')
-            ->paginate($request->perPage);
-
-        // $slots = (new Slot)->names();
-        $slots = Slot::select('*')
-            ->selectRaw('CONCAT( provider_id , "_" , game_id ) AS game_code')
-            ->get()
-            ->keyBy('game_code');
-
-        $res = [
-            'data' => $res->map(function ($row) use ($slots, $roundNum) {
-                $game_code = "{$row->provider_id}_{$row->game_code}";
-                return [
-                    'ticket_id' => $row->id,
-                    'agent' => $row->agent->username,
-                    'username' => $row->account->username,
-                    'currency' => $row->currency,
-                    'game' => $slots[$game_code]->name ?? $game_code,
-                    'bet' => number_format($row->stake, $roundNum),
-                    'payout'    => number_format($row->payout, $roundNum),
-                    'win'       => number_format($row->win, $roundNum),
-                    'datetime'  => $row->datetime,
-                ];
-            }),
-            'page' => $res->currentPage(),
-            'perPage' => $res->perPage(),
-            'total' => $res->total(),
-            'lastPage' => $res->lastPage(),
-        ];
+            ->orderBy('id', 'DESC');
 
         // $this->logQuery('BetHistory');
 
-        return response($res);
+        return $res;
     }
 
     public function winloseView()
     {
-        $userAgentId = Auth::user()->agent_id;
         return view('report.winlose', [
-            'userAgentId' => $userAgentId,
             'agents' => $this->getAgentsForView(),
         ]);
     }
@@ -216,14 +170,13 @@ class ReportController extends Controller
         # new check
         $request->validate([
             'agent' => 'required|array',
-            'agent.*' => 'exists:agent,id',
             'groupby' => 'required|in:agent,member,day,provider,game',
             'startedAt' => 'nullable|date_format:Y-m-d',
             'finishedAt' => 'nullable|date_format:Y-m-d',
         ]);
 
         $user = Auth::user();
-        if ($user->agent_id != 0) {
+        if ($user->hasRole(['agent', 'agent_sub'])) {
             if ($request->agent[0] != $user->agent_id) {
                 abort(403, 'Unauthorized action.');
             }
@@ -233,18 +186,15 @@ class ReportController extends Controller
         $rows    = [];
         $footers = [];
         $conditions = [];
-        $range_ids  = $this->getIdsByTimeRange('wager', 'id', 'date', $request->startedAt, $request->finishedAt);
-        if (!$range_ids) {
-            return response([
-                'data' => [
-                    'rows'   => $rows,
-                    'footer' => $footers,
-                ]
-            ]);
-        }
-        $conditions[] = ['id', '>=', $range_ids[0]];
-        $conditions[] = ['id', '<=', $range_ids[1]];
         $conditions[] = ['status', '=', 1];
+        
+        if ($request->startedAt) {
+            $conditions[] = ['datetime', '>=', $request->startedAt];
+        }
+        
+        if ($request->finishedAt) {
+            $conditions[] = ['datetime', '<=', $request->finishedAt];
+        }
 
         $groupby = 'agent_id';
         $orderby = 'win';
@@ -335,9 +285,9 @@ class ReportController extends Controller
                     'currency' => $currency,
                     'player'   => $wager->player,
                     'ticket'   => (int) $wager->ticket,
-                    'bet'      => number_format($wager->stake, 2),
-                    'payout'   => number_format($wager->payout, 2),
-                    'win'      => number_format($wager->win, 2),
+                    'bet'      => floatval($wager->stake),
+                    'payout'   => floatval($wager->payout),
+                    'win'      => floatval($wager->win),
                     'margin'   => number_format($margin, 2) . '%',
                     'type'     => $type
                 ];
@@ -356,21 +306,21 @@ class ReportController extends Controller
                     'currency' => $currency,
                     'player'   => $total['player'],
                     'ticket'   => (int) $total['ticket'],
-                    'bet'      => number_format($total['bet'], 2),
-                    'payout'   => number_format($total['payout'], 2),
-                    'win'      => number_format($total['win'], 2),
+                    'bet'      => floatval($total['bet']),
+                    'payout'   => floatval($total['payout']),
+                    'win'      => floatval($total['win']),
                     'margin'   => number_format($margin, 2) . '%',
                     'type'     => $type,
                 ];
             }
         }
 
-        return response([
+        return [
             'data' => [
                 'rows'   => $rows,
                 'footer' => $footers,
             ],
-        ]);
+        ];
     }
 
     public function betDetail(Request $request)
@@ -402,7 +352,6 @@ class ReportController extends Controller
     {
         return view('report.transfer', [
             'agents' => $this->getAgentsForView(),
-            'userAgentId' => Auth::user()->agent_id,
         ]);
     }
 
@@ -411,78 +360,46 @@ class ReportController extends Controller
         # new check
         $request->validate([
             'agent' => 'required|array',
-            'agent.*' => 'exists:agent,id',
             'member' => 'nullable|string',
             'startedAt' => 'nullable|date_format:Y-m-d H:i:s',
             'finishedAt' => 'nullable|date_format:Y-m-d H:i:s',
         ]);
 
         $user = Auth::user();
-        if ($user->agent_id != 0) {
+        if ($user->hasRole(['agent', 'agent_sub'])) {
             if ($request->agent[0] != $user->agent_id) {
                 abort(403, 'Unauthorized action.');
             }
         }
-
-        $agents = $request->agent;
-
-        $range_ids = $this->getIdsByTimeRange('transfer', 'id', 'created_at', $request->startedAt, $request->finishedAt);
-        if (!$range_ids) {
-            return response([
-                'data' => null,
-            ]);
-        }
+        
         $conditions = [];
         if (strlen($request->member) > 0) {
             $conditions[] = ['username', 'like', "%$request->member%"];
         }
-        $conditions[] = ['id', '>=', $range_ids[0]];
-        $conditions[] = ['id', '<=', $range_ids[1]];
-
-        $transfers = Transfer::with(['agent', 'account'])
+        
+        if ($request->startedAt) {
+            $conditions[] = ['created_at', '>=', $request->startedAt];
+        }
+        
+        if ($request->finishedAt) {
+            $conditions[] = ['created_at', '<=', $request->finishedAt];
+        }
+        
+        $agents = $request->agent;
+        $query = Transfer::with(['agent', 'account'])
             ->where($conditions)
             ->whereIn('agent_id', $agents)
-            ->orderBy('id', 'DESC')
-            ->paginate($request->perPage);
-
-        $res = [
-            'data' => $transfers->map(function ($transfer) {
-                $amount = $transfer->amount;
-                $credit = '';
-                $debit  = '';
-                if ($amount > 0) {
-                    $credit = number_format($amount, 2);
-                } else if ($amount < 0) {
-                    $debit = number_format($amount, 2);
-                }
-
-                return [
-                    'ref_id'   => $transfer->ref_id,
-                    'agent'    => $transfer->agent->username,
-                    'username' => $transfer->account->username,
-                    'currency' => $transfer->currency,
-                    'credit'   => $credit,
-                    'debit'    => $debit,
-                    'balance'  => number_format($transfer->balance, 2),
-                    'datetime' => (string) $transfer->created_at,
-                ];
-            }),
-            'page' => $transfers->currentPage(),
-            'perPage' => $transfers->perPage(),
-            'total' => $transfers->total(),
-            'lastPage' => $transfers->lastPage(),
-        ];
+            ->orderBy('id', 'DESC');
 
         // $this->logQuery('Transfer');
 
-        return response($res);
+        return $query;
     }
 
     public function allReportView()
     {
         return view('report.all_report', [
             'agents' => $this->getAgentsForView(),
-            'userAgentId' => Auth::user()->agent_id,
         ]);
     }
 
@@ -491,28 +408,21 @@ class ReportController extends Controller
         # new check
         $request->validate([
             'agent' => 'required|array',
-            'agent.*' => 'exists:agent,id',
             'member' => 'nullable|string',
             'startedAt' => 'nullable|date_format:Y-m-d H:i:s',
             'finishedAt' => 'nullable|date_format:Y-m-d H:i:s',
         ]);
 
         $user = Auth::user();
-        if ($user->agent_id != 0) {
+        if ($user->hasRole(['agent', 'agent_sub'])) {
             if ($request->agent[0] != $user->agent_id) {
                 abort(403, 'Unauthorized action.');
             }
         }
 
-        $agents = $request->agent;
-
-        $range_ids = $this->getIdsByTimeRange('ledger', 'id', 'created_at', $request->startedAt, $request->finishedAt);
-        if (!$range_ids) {
-            return response([
-                'data' => null,
-            ]);
-        }
         $conditions = [];
+        $conditions[] = ['status', '=', 1];
+
         if (strlen($request->member) > 0) {
             if ($accountid = Account::whereNickname($request->member)->first()) {
                 $conditions[] = ['account_id', '=', $accountid->id];
@@ -520,48 +430,24 @@ class ReportController extends Controller
                 $conditions[] = ['account_id', '=', 0];
             }
         }
-        $conditions[] = ['status', '=', 1];
-        $conditions[] = ['id', '>=', $range_ids[0]];
-        $conditions[] = ['id', '<=', $range_ids[1]];
-
-        $ledgers = Ledger::with(['agent', 'provider', 'account'])
+        
+        if ($request->startedAt) {
+            $conditions[] = ['created_at', '>=', $request->startedAt];
+        }
+        
+        if ($request->finishedAt) {
+            $conditions[] = ['created_at', '<=', $request->finishedAt];
+        }
+        
+        $agents = $request->agent;
+        $query = Ledger::with(['agent', 'provider', 'account'])
             ->where($conditions)
             ->whereIn('agent_id', $agents)
-            ->orderBy('id', 'DESC')
-            ->paginate($request->perPage);
-
-        $res = [
-            'data' => $ledgers->map(function ($ledger) {
-                $amount = $ledger->amount;
-                $credit = number_format(0, 2);
-                $debit  = number_format(0, 2);
-                if ($amount > 0) {
-                    $credit = number_format($amount, 2);
-                } elseif ($amount < 0) {
-                    $debit  = number_format($amount, 2);
-                }
-
-                return [
-                    'ref_id'   => $ledger->ref_id,
-                    'provider' => $ledger->provider->name ?? '$TRANS$',
-                    'agent'    => $ledger->agent->username,
-                    'username' => $ledger->account->nickname,
-                    'currency' => $ledger->currency,
-                    'credit'   => $credit,
-                    'debit'    => $debit,
-                    'datetime' => (string) $ledger->created_at,
-                    'end_balance' => number_format($ledger->end_balance, 2)
-                ];
-            }),
-            'page' => $ledgers->currentPage(),
-            'perPage' => $ledgers->perPage(),
-            'total' => $ledgers->total(),
-            'lastPage' => $ledgers->lastPage(),
-        ];
+            ->orderBy('id', 'DESC');
 
         // $this->logQuery('AllReport');
 
-        return response($res);
+        return $query;
     }
 
     public function walletView(Request $request)
@@ -578,65 +464,36 @@ class ReportController extends Controller
         # new check
         $request->validate([
             'providers' => 'required|array',
-            'providers.*' => 'exists:provider,id',
-            'games' => 'required|array',
-            'games.*' => 'exists:slot,game_id',
             'status' => 'required|in:1,0',
         ]);
 
         $user = Auth::user();
-        if ($user->agent_id != 0) {
-            if ($request->agent[0] != $user->agent_id) {
-                abort(403, 'Unauthorized action.');
-            }
-        }
 
-        # get agents
-        $agents = [];
-        foreach ($this->getAgentsForView() as $agent) {
-            $agents[] = $agent['id'];
-        }
-
-        $wallets = WalletGame::with(['account.agent', 'getProvider'])
+        $query = WalletGame::with(['account.agent', 'getProvider'])
             ->where('status', $request->status)
-            ->whereIn('game_id', $request->games)
             ->whereIn('provider', $request->providers)
-            ->orderBy('id', 'DESC')
-            ->paginate($request->perPage);
+            ->orderBy('id', 'DESC');
 
-        $slots = (new Slot)->names();
+        if ($request->game) {
+            $query->where('game_id', $request->game);
+        }
 
-        return response([
-            'data' => $wallets->map(function ($wallet) use ($agents, $slots) {
-                if (in_array($wallet->account->agent->id, $agents)) {
-                    $game_code = $wallet->provider . '_' . $wallet->game_id;
-                    return [
-                        'id'        => $wallet->id,
-                        'provider'  => $wallet->getProvider->name,
-                        'agent'     => $wallet->account->agent->username,
-                        'account'   => $wallet->account->username,
-                        'game'      => $slots[$game_code]['name'] ?? $game_code,
-                        'amount'    => number_format($wallet->amount, 2),
-                        'status'    => $wallet->status,
-                        'statusNum' => $wallet->status,
-                        'datetime'  => $wallet->created_at,
-                    ];
-                }
-            }),
-            'page' => $wallets->currentPage(),
-            'perPage' => $wallets->perPage(),
-            'total' => $wallets->total(),
-            'lastPage' => $wallets->lastPage(),
-        ]);
+        $agents = $request->agents;
+        if ($user->hasRole(['agent', 'agent_sub'])) {
+            $agents = [$user->agent_id];
+        }
+        $query->whereHas('account', function ($q) use ($agents) {
+            $q->whereIn('agent_id', $agents);
+        });
+        
+        return $query;
     }
 
     public function deposit(Request $request)
     {
         $user = Auth::user();
-        $agent_id = $user->agent_id;
-        $type = $user->type;
 
-        if ($agent_id != 0 || $type != 1) {
+        if (!$user->hasRole(['admin', 'admin_sub', 'agent'])) {
             return response()->json([
                 'status' => 0,
                 'msg' => '權限不足以還款'
@@ -651,11 +508,6 @@ class ReportController extends Controller
         if ($wallet->status == 1) {
             return response()->json(['status' => 12,  'msg' => 'WalletID is deposited']);
         }
-        if ($wallet->amount <= 0) {
-            $wallet->status = 2;
-            $wallet->save();
-            return response()->json(['status' => 0]);
-        }
         $wallet->status = 0;
         $wallet->save();
 
@@ -663,17 +515,17 @@ class ReportController extends Controller
         $curl->setHeader('Content-Type', 'application/json');
         $curl->setHeader('charset', 'UTF-8');
         $curl->post(
-            env('IFUN_API_URL') . '/admin/ifun/force_deposit',
-            $this->helper->hashInput([
+            env('API_URL') . '/admin/force_deposit',
+            json_encode($this->helper->hashInput([
+                'account_id' => $wallet->account_id,
                 'wallet_id' => $wallet->id,
                 'amount' => $wallet->amount,
-                'mark'   => '-force@' . time()
-            ], env('IFUN_SECRET'))
+            ], env('API_ADMIN_SECRET')))
         );
-        if (!$curl->rawResponse) {
+        if (!$curl->response) {
             return response()->json(['status' => 99, 'msg' => 'Request Error']);
         }
-        return response()->json(json_decode($curl->rawResponse));
+        return response()->json(json_decode($curl->response));
     }
 
     public function allReportSWView()
@@ -689,20 +541,18 @@ class ReportController extends Controller
     {
         $request->validate([
             'agents' => 'required|array',
-            'agents.*' => 'exists:agent,id',
             'providers' => 'required|array',
-            'providers.*' => 'exists:provider,id',
         ]);
 
-        $range_ids = $this->getIdsByTimeRange('ledger_external', 'id', 'created_at', $request->startedAt, $request->finishedAt);
-        if (!$range_ids) {
-            return response([
-                'data' => null,
-            ]);
-        }
         $conditions = [];
-        $conditions[] = ['id', '>=', $range_ids[0]];
-        $conditions[] = ['id', '<=', $range_ids[1]];
+        
+        if ($request->startedAt) {
+            $conditions[] = ['created_at', '>=', $request->startedAt];
+        }
+        
+        if ($request->finishedAt) {
+            $conditions[] = ['created_at', '<=', $request->finishedAt];
+        }
 
         $query = LedgerExternal::with(['agent', 'account', 'provider'])
             ->whereIn('agent_id', $request->agents)
@@ -722,28 +572,148 @@ class ReportController extends Controller
             $query->where('status', $status);
         }
 
-        $perPage = intval($request->perPage ?? 25);
-        $res = $query->paginate($perPage);
+        return $query;
+    }
+
+    public function list(Request $request, $type)
+    {
+        switch ($type) {
+            case 'win_lose':
+                return response($this->winLoseList($request));
+            case 'bet_history':
+                $query = $this->betHistoryList($request);
+                $res = $query->paginate($request->perPage);
+                $data = $this->mapReportData($res, $type);
+                break;
+            case 'all_report':
+                $query = $this->allReportList($request);
+                $res = $query->paginate($request->perPage);
+                $data = $this->mapReportData($res, $type);
+                break;
+            case 'all_report_sw':
+                $query = $this->allReportSWList($request);
+                $res = $query->paginate($request->perPage);
+                $data = $this->mapReportData($res, $type);
+                break;
+            case 'transfer':
+                $query = $this->transferList($request);
+                $res = $query->paginate($request->perPage);
+                $data = $this->map($res, $type);
+                break;
+            case 'wallet':
+                $query = $this->walletList($request);
+                $res = $query->paginate($request->perPage);
+                $data = $this->mapReportData($res, $type);
+                break;
+        }
 
         return response([
-            'data' => $res->map(function ($row) {
-                return [
-                    'id' => $row->id,
-                    'ref_id' => $row->ref_id,
-                    'type' => $row->type,
-                    'provider' => $row->provider->name,
-                    'agent' => $row->agent->username,
-                    'account' => $row->account->username,
-                    'currency' => $row->currency,
-                    'amount' => $row->amount,
-                    'status' => $row->status,
-                    'datetime' => $row->created_at->format('Y-m-d H:i:s'),
-                ];
-            }),
+            'data' => $data,
             'page' => $res->currentPage(),
             'perPage' => $res->perPage(),
             'total' => $res->total(),
             'lastPage' => $res->lastPage(),
         ]);
+    }
+
+    public function exportExcel(Request $request, $type)
+    {
+        switch ($type) {
+            case 'win_lose':
+                # 100
+                break;
+            case 'bet_history':
+                # 7
+                break;
+            case 'all_report':
+                # 7
+                break;
+            case 'all_report_sw':
+                # 7
+                break;
+        }
+    }
+
+    public function mapReportData($data, $type)
+    {
+        switch ($type) {
+            case 'bet_history':
+                $slots = Slot::select('*')
+                    ->selectRaw('CONCAT( provider_id , "_" , game_id ) AS game_code')
+                    ->get()
+                    ->keyBy('game_code');
+                return $data->map(function ($row) use ($slots) {
+                    $game_code = "{$row->provider_id}_{$row->game_code}";
+                        return [
+                            'ticket_id' => $row->id,
+                            'agent' => $row->agent->username,
+                            'username' => $row->account->username,
+                            'currency' => $row->currency,
+                            'game' => $slots[$game_code]->name ?? $game_code,
+                            'bet' => floatval($row->stake),
+                            'payout'    => floatval($row->payout),
+                            'win'       => floatval($row->win),
+                            'datetime'  => $row->datetime,
+                        ];
+                    });
+            case 'all_report':
+                return $data->map(function ($ledger) {
+                    return [
+                        'ref_id'   => $ledger->ref_id,
+                        'provider' => $ledger->provider->name ?? '$TRANS$',
+                        'agent'    => $ledger->agent->username,
+                        'username' => $ledger->account->nickname,
+                        'currency' => $ledger->currency,
+                        'amount'   => floatval($ledger->amount),
+                        'datetime' => (string) $ledger->created_at,
+                        'end_balance' => floatval($ledger->end_balance)
+                    ];
+                });
+            case 'all_report_sw':
+                return $data->map(function ($row) {
+                    return [
+                        'id' => $row->id,
+                        'ref_id' => $row->ref_id,
+                        'type' => $row->type,
+                        'provider' => $row->provider->name,
+                        'agent' => $row->agent->username,
+                        'account' => $row->account->username,
+                        'currency' => $row->currency,
+                        'amount' => number_format($row->amount, 2),
+                        'status' => $row->status,
+                        'datetime' => $row->created_at->format('Y-m-d H:i:s'),
+                    ];
+                });
+                break;
+            case 'transfer':
+                return $data->map(function ($transfer) {
+                    return [
+                        'ref_id'   => $transfer->ref_id,
+                        'agent'    => $transfer->agent->username,
+                        'username' => $transfer->account->username,
+                        'currency' => $transfer->currency,
+                        'amount'   => floatval($transfer->amount),
+                        'balance'  => floatval($transfer->balance),
+                        'datetime' => (string) $transfer->created_at,
+                    ];
+                });
+                break;
+            case 'wallet':
+                $slots = (new Slot)->names();
+                return $data->map(function ($wallet) use ($slots) {
+                    $game_code = $wallet->provider . '_' . $wallet->game_id;
+                    return [
+                        'id'        => $wallet->id,
+                        'provider'  => $wallet->getProvider->name,
+                        'agent'     => $wallet->account->agent->username,
+                        'account'   => $wallet->account->username,
+                        'game'      => $slots[$game_code]['name'] ?? $game_code,
+                        'status'    => $wallet->status,
+                        'amount'    => floatval($wallet->amount),
+                        'datetime'  => $wallet->created_at,
+                    ];
+                });
+                break;
+        }
     }
 }

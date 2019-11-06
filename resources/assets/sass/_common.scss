@@ -12,3 +12,38 @@
         height: 100% !important;
     }
 }
+
+.table-col {
+    &-time {
+        text-align: center !important;
+        width: 155px;
+        min-width: 155px;
+    }
+    &-status {
+        text-align: center !important;
+        width: 115px;
+        min-width: 115px;
+    }
+    &-cur {
+        text-align: center !important;
+        width: 55px;
+        min-width: 55px;
+    }
+    &-other {
+        min-width: 70px;
+    }
+    &-redNum {
+        text-align: right;
+        color: red;
+        font-weight: bold;
+    }
+    &-greenNum {
+        text-align: right;
+        color: rgb(25, 172, 25);
+        font-weight: bold;
+    }
+    &-num {
+        text-align: right;
+        font-weight: bold;
+    }
+}

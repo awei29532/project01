@@ -2,16 +2,19 @@
 $menus = [
     [
         'title' => 'products',
+        'allowRole' => ['admin', 'admin_sub'],
         'items' => [
             [
                 'title' => 'providers',
                 'href' => '/products/provider',
                 'icon' => 'store-alt',
+                'allowRole' => ['admin', 'admin_sub'],
             ],
             [
                 'title' => 'games',
                 'href' => '/products/game',
                 'icon' => 'gamepad',
+                'allowRole' => ['admin', 'admin_sub'],
             ],
         ],
     ],
@@ -22,6 +25,7 @@ $menus = [
                 'title' => 'agents',
                 'href'  => '/accounts/agent',
                 'icon'  => 'users',
+                'allowRole' => ['admin', 'admin_sub'],
             ],
             [
                 'title' => 'members',
@@ -32,7 +36,14 @@ $menus = [
                 'title' => 'sub_accounts',
                 'href'  => '/accounts/sub_account',
                 'icon'  => 'user-friends',
+                'allowRole' => ['admin', 'agent'],
             ],
+            [
+                'title' => 'users',
+                'href' => '/accounts/user',
+                'icon' => 'user',
+                'allowRole' => ['admin'],
+            ]
         ],
     ],
     [
@@ -82,13 +93,22 @@ $menus = [
                 </a>
             </li>
             @foreach ($menus as $menu)
-                <li class="nav-title">{{trans('title.' . $menu['title'])}}</li>
+                @if (isset($menu['allowRole']) && !Auth::user()->hasRole($menu['allowRole']))
+                    @continue
+                @else
+                    <li class="nav-title">{{trans('title.' . $menu['title'])}}</li>
+                @endif
+                    
                 @foreach ($menu['items'] as $item)
-                    <li class="nav-item">
-                        <a class="nav-link {{$item['title'] == $active ? 'active' : ''}}" href="{{$item['href']}}">
-                            <i class="nav-icon fas fa-{{$item['icon']}}"></i></i> {{trans('title.' . $item['title'])}}
-                        </a>
-                    </li>
+                    @if (isset($item['allowRole']) && !Auth::user()->hasRole($item['allowRole']))
+                        @continue
+                    @else
+                        <li class="nav-item">
+                            <a class="nav-link {{$item['title'] == $active ? 'active' : ''}}" href="{{$item['href']}}">
+                                <i class="nav-icon fas fa-{{$item['icon']}}"></i></i> {{trans('title.' . $item['title'])}}
+                            </a>
+                        </li>
+                    @endif
                 @endforeach
             @endforeach
         </ul>

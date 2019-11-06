@@ -75,12 +75,12 @@ export default {
         submit(evt) {
             evt.preventDefault();
             this.errors = '';
-            axios.post('/api/login', {
+            this.$ajax('POST', '/api/login', {
                 username: this.username,
                 password: this.password,
                 captcha: this.captcha,
             }).then(res => {
-                location.href = res.data.redirect;
+                location.href = res.redirect;
             }).catch(err => {
                 if (err.response.status == 422){
                     this.errors = err.response.data.errors;
@@ -92,7 +92,7 @@ export default {
         getCaptchaImg() {
             axios.get('/login-captcha-img')
             .then(res => {
-                this.captchaImg = res.data;
+                this.captchaImg = res;
             })
             .catch(err => {
                 console.error(err); 

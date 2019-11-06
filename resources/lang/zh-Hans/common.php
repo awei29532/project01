@@ -46,5 +46,9 @@ return [
     'lang' => [
         'zh-Hans' => '简体中文',
         'en' => '英文'
-    ]
+    ],
+    'role' => '角色',
+    'unknow-error' => '发生未知的错误',
+    'empty-data' => '无资料',
+    'export' => '汇出',
 ];

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\AgentEvent;
+use App\Events\UserEvent;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
 use App\Models\AgentDetail;
@@ -85,49 +87,55 @@ class AgentController extends Controller
             )->where('status', 1)
             ->get();
 
+        $settings = [];
         if ($id) {
             $agent = Agent::with('detail')
                 ->with('settings.provider')
                 ->with('wallet')
                 ->find($id);
+
+            $settings = $agent->settings->map(function ($setting) {
+                return [
+                    'id' => $setting->provider_id,
+                    'status' => $setting->status,
+                    'percent' => $setting->percentage,
+                    'code' => $setting->provider->code,
+                ];
+            })->keyBy('code');
         }
 
         return view('accounts.agent_edit', [
             'currencies' => $currencies,
             'providers' => $providers,
             'agent_id' => $id,
-            'agent' => $id ? [
-                'username' => $agent->username,
-                'password' => $agent->password,
-                'name' => $agent->detail->name,
-                'currency' => $agent->currency,
-                'remark' => $agent->detail->remark,
-                'auth_mode' => $agent->auth_mode,
-                'callback' => $agent->callback,
-                'wallet_mode' => $agent->wallet_mode,
-                'url_balance' => $agent->wallet->url_balance ?? '',
-                'url_deposit' => $agent->wallet->url_deposit ?? '',
-                'url_withdrawal' => $agent->wallet->url_withdrawal ?? '',
-                'url_rollback' => $agent->wallet->url_rollback ?? '',
-                'configs' => $agent->settings->map(function ($setting) {
+            'agent' => [
+                'username' => $agent->username ?? null,
+                'password' => $agent->password ?? null,
+                'name' => $agent->detail->name ?? null,
+                'currency' => $agent->currency ?? null,
+                'remark' => $agent->detail->remark ?? null,
+                'auth_mode' => $agent->auth_mode ?? 1,
+                'callback' => $agent->callback ?? null,
+                'wallet_mode' => $agent->wallet_mode ?? 0,
+                'url_balance' => $agent->wallet->url_balance ?? null,
+                'url_deposit' => $agent->wallet->url_deposit ?? null,
+                'url_withdrawal' => $agent->wallet->url_withdrawal ?? null,
+                'url_rollback' => $agent->wallet->url_rollback ?? null,
+                'configs' => $providers->map(function ($provider) use ($settings) {
                     return [
-                        'id' => $setting->provider_id,
-                        'status' => $setting->status,
-                        'percent' => $setting->percentage,
-                        'code' => $setting->provider->code,
+                        'id' => $provider->id,
+                        'code' => $provider->code,
+                        'name' => $provider->name,
+                        'status' => $settings[$provider->code]['status'] ?? 0,
+                        'percent' => $settings[$provider->code]['percentage'] ?? 0,
                     ];
-                })->keyBy('code'),
-            ] : [],
+                }),
+            ],
         ]);
     }
 
     public function addAgent(Request $request)
     {
-        $auth_user = Auth::user();
-        if ($auth_user->agent_id != 0 || $auth_user->type != 1) {
-            abort(403, 'Unauthorized action.');
-        }
-
         $this->checkAgentData($request);
 
         $agent = new Agent();
@@ -169,6 +177,8 @@ class AgentController extends Controller
         $user->password = Hash::make($request->password);
         $user->save();
 
+        $user->assignRole('agent');
+
         $today = date('Y-m-d');
         $inserts = [];
         foreach ($request->configs as $config) {
@@ -181,22 +191,21 @@ class AgentController extends Controller
             ];
         }
         AgentSetting::insert($inserts);
+
+        event(new UserEvent($request, 'event.agent.add', [
+            'username' => $request->username,
+        ]));
+
+        event(new AgentEvent($request->username));
     }
 
     public function editAgent(Request $request)
     {
-        $auth_user = Auth::user();
-        if ($auth_user->agent_id != 0 || $auth_user->type != 1) {
-            abort(403, 'Unauthorized action.');
-        }
-
         $this->checkAgentData($request, 'edit');
 
         $agent = Agent::find($request->id);
-        $agent->parent_id = 0;
         $agent->key = hash_hmac('md5', $agent->username . $agent->currency, $agent->username);
         $agent->secret = md5($agent->username . $agent->currency . $agent->key . Carbon::now()->timestamp);
-        $agent->status = 1;
         $agent->auth_mode = $request->auth_mode;
         $agent->callback = $request->callback;
         $agent->wallet_mode = $request->wallet_mode;
@@ -253,6 +262,12 @@ class AgentController extends Controller
             }
         }
         AgentSetting::insert($insert);
+
+        event(new UserEvent($request, 'event.agent.edit', [
+            'username' => $request->username,
+        ]));
+
+        event(new AgentEvent($request->username));
     }
 
     public function enabledAgent(Request $request)
@@ -265,6 +280,13 @@ class AgentController extends Controller
         $agent = Agent::find($request->id);
         $agent->status = $request->enabled;
         $agent->save();
+
+        event(new UserEvent($request, 'event.agent.enabled', [
+            'username' => $agent->username,
+            'status' => $request->enabled,
+        ]));
+
+        event(new AgentEvent($agent->username));
     }
 
     private function checkAgentData($request, $type = 'add')
@@ -305,10 +327,6 @@ class AgentController extends Controller
     public function subList()
     {
         $user = Auth::user();
-        if ($user->type != 1) {
-            return redirect('dashboard');
-        }
-
         $data = request()->all();
 
         $query = User::with('agent')
@@ -370,6 +388,16 @@ class AgentController extends Controller
         $user->remark = $request->remark;
         $user->status = 1;
         $user->save();
+
+        if (Auth::user()->hasRole('admin')) {
+            $user->assignRole('admin_sub');
+        } else {
+            $user->assignRole('agent_sub');
+        }
+
+        event(new UserEvent($request, 'event.sub.add', [
+            'username' => $request->username,
+        ]));
     }
 
     public function editSub (Request $request)
@@ -383,6 +411,12 @@ class AgentController extends Controller
         $user->name = $request->name;
         $user->remark = $request->remark;
         $user->save();
+
+        event(new UserEvent($request, 'event.sub.edit', [
+            'username' => $user->username,
+            'name' => $user->name,
+            'remark' => $user->remark,
+        ]));
     }
 
     public function enabledSub(Request $request)
@@ -395,6 +429,11 @@ class AgentController extends Controller
         $user = User::find($request->id);
         $user->status = $request->enabled;
         $user->save();
+
+        event(new UserEvent($request, 'event.sub.enabled', [
+            'username' => $user->username,
+            'status' => $request->enabled,
+        ]));
     }
 
     private function checkSubData ($request, $type = 'add')

@@ -8,7 +8,6 @@ use App\Models\User;
 
 class UserEvent
 {
-
     use SerializesModels;
 
     /**

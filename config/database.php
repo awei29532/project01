@@ -41,9 +41,22 @@ return [
 
         'mysql' => [
             'driver' => 'mysql',
+            'read' => [
+                'host' => env('DB_HOST_R', 'localhost'),
+                'port' => env('DB_PORT_R', '3306'),
+                'username' => env('DB_USERNAME_R', 'forge'),
+                'password' => env('DB_PASSWORD_R', '')
+            ],
+            'write' => [
+                'host' => env('DB_HOST_W', 'localhost'),
+                'port' => env('DB_PORT_W', '3306'),
+                'username' => env('DB_USERNAME_W', 'forge'),
+                'password' => env('DB_PASSWORD_W', '')
+            ],
+            'database' => env('DB_DATABASE', 'forge'),
+            // migrate需使用最高權限
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
-            'database' => env('DB_DATABASE', 'forge'),
             'username' => env('DB_USERNAME', 'forge'),
             'password' => env('DB_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
@@ -106,13 +119,13 @@ return [
 
     'redis' => [
 
-        'client' => 'predis',
+        'client' => env('REDIS_DRIVER', 'predis'),
 
         'default' => [
             'host' => env('REDIS_HOST', '127.0.0.1'),
             'password' => env('REDIS_PASSWORD', null),
             'port' => env('REDIS_PORT', 6379),
-            'database' => 0,
+            'database' => env('REDIS_DB', 0),
         ],
 
     ],

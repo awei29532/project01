@@ -7,7 +7,6 @@ use App\Models\UserLog;
 
 class UserEventListener
 {
-
     /**
      * Create the event listener.
      *
@@ -35,5 +34,4 @@ class UserEventListener
             'device'  => $evt->device
         ]);
     }
-
 }

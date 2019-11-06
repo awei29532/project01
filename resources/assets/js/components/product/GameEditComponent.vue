@@ -32,7 +32,7 @@
                             :state="handleErrors('provider_id')"
                             required
                             :disabled="gameid != 0">
-                                <option value="">{{trans('common.select')}}</option>
+                                <option value="" disabled>{{trans('common.select')}}</option>
                                 <option v-for="item in providerOptions" :key="item.id" :value="item.id">{{item.name}}</option>
                         </b-form-select>
                         <b-form-invalid-feedback>
@@ -44,7 +44,7 @@
                             v-model="data.has_fun"
                             :state="handleErrors('has_fun')"
                             required>
-                                <option value="">{{trans('common.select')}}</option>
+                                <option value="" disabled>{{trans('common.select')}}</option>
                                 <option value="1">{{trans('games.has_fun')}}</option>
                                 <option value="0">{{trans('games.not_has_fun')}}</option>
                         </b-form-select>
@@ -61,7 +61,7 @@
 </template>
 
 <script>
-const luxon = require('luxon');
+
 export default {
     props: {
         gameid: {
@@ -92,7 +92,7 @@ export default {
             e.preventDefault();
             this.errors = [];
             let url = '/api/products/game/' + (this.gameid == 0 ? 'add' : 'edit');
-            axios.post(url, this.data)
+            this.$ajax('POST', url, this.data)
             .then(res => {
                 location.href = '/products/game';
             })

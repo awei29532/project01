@@ -19,7 +19,7 @@
 			<div class="card-footer" v-if="paginate">
 				<div class="row justify-content-between align-items-baseline">
 					<b-input-group class="col-3" :prepend="trans('common.per_page')">
-						<b-form-select v-model="perPage" @change.native="listSearch(1)">
+						<b-form-select v-model="perPage" @change="listSearch(1)">
 							<option active value="25">25</option>
 							<option value="50">50</option>
 							<option value="100">100</option>
